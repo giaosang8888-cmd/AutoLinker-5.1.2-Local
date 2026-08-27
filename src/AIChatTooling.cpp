@@ -467,9 +467,17 @@ std::string ExecuteToolCallImpl(
 	bool& outOk,
 	const std::function<bool()>& cancelCallback)
 {
-	outOk = false;
+		outOk = false;
 
-	if (toolName == "run_powershell_command") {
+		// 静默 MCP 版：禁用 run_powershell_command
+		if (toolName == "run_powershell_command") {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["error"] = "run_powershell_command is disabled in silent MCP mode";
+			return JsonToLocalText(r);
+		}
+
+		if (toolName == "run_powershell_command") {
 		std::string commandUtf8;
 		std::string workingDirectoryUtf8;
 		int timeoutSeconds = 60;

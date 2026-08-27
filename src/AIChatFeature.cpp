@@ -114,8 +114,10 @@ constexpr UINT_PTR kActionClearCancel = 7;
 constexpr UINT_PTR kActionPlanMode = 8;
 constexpr UINT_PTR kActionAutoAllowMode = 9;
 
-constexpr const char* kChatMcpGuideUrl =
-	"https://github.com/aiqinxuancai/AutoLinker/blob/master/CONFIG.md#%E5%A4%96%E9%83%A8-agent-mcp-%E9%85%8D%E7%BD%AE";
+// 静默 MCP 版：禁用 AI Chat UI
+constexpr bool kAIChatIdeTabsEnabled = false;
+
+constexpr const char* kChatMcpGuideUrl = "";
 constexpr const char* kChatAgentWhitepaperUrl =
 	"https://github.com/aiqinxuancai/Awesome-E-Agent";
 constexpr const char* kChatHomeUrl =
@@ -6766,8 +6768,19 @@ void EnsureTabCreated()
 		return;
 	}
 
-	if (!EnsureChatTabAddedInternal()) {
-		return;
+	// 静默 MCP 版：即使 UI 被禁用，也需要创建 chat dialog 窗口用于工具调用
+	if (kAIChatIdeTabsEnabled) {
+		if (!EnsureChatTabAddedInternal()) {
+			return;
+		}
+	}
+	else {
+		// 静默模式：只创建 dialog 窗口，不添加 Tab
+		if (!EnsureChatHostWindowCreated()) {
+			return;
+		}
+	}
+}
 	}
 }
 

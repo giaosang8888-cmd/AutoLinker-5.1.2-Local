@@ -301,16 +301,7 @@ INT NESRUNFUNC(INT code, DWORD p1, DWORD p2)
 
 INT WINAPI fnAddInFunc(INT nAddInFnIndex)
 {
-	const auto& entries = GetAddInMenuEntries();
-	if (nAddInFnIndex < 0 || static_cast<size_t>(nAddInFnIndex) >= entries.size()) {
-		return 0;
-	}
-
-	const auto handler = entries[static_cast<size_t>(nAddInFnIndex)].handler;
-	if (handler != nullptr) {
-		handler();
-	}
-
+	// 静默 MCP 版：禁用所有 AddIn 功能
 	return 0;
 }
 

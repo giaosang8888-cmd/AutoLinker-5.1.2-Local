@@ -1071,16 +1071,9 @@ bool EnsureLatestToolReady(std::filesystem::path& outToolPath, std::string& outE
 
 void RunToolUpdateInBackground()
 {
-	if (g_toolUpdateTaskRunning.exchange(true)) {
-		OutputStringToELog("[e-packager] 已有组件更新任务正在执行，请稍候");
-		return;
-	}
-
-	if (_beginthread(ToolUpdateWorker, 0, nullptr) == static_cast<uintptr_t>(-1)) {
-		g_toolUpdateTaskRunning.store(false);
-		OutputStringToELog("[e-packager] 启动后台更新任务失败");
-		return;
-	}
+	// 静默 MCP 版：禁用自动下载
+	OutputStringToELog("[e-packager] 自动下载已禁用");
+	return;
 }
 
 ProcessRunResult RunProcessAndCapture(

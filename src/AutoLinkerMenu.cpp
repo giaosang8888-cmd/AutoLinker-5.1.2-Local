@@ -12,6 +12,9 @@ bool g_isContextMenuRegistered = false;
 HMENU g_topLinkerSubMenu = NULL;
 std::unordered_map<UINT, std::string> g_topLinkerCommandMap;
 
+// 静默 MCP 版：禁用 UI 菜单
+constexpr bool kAutoLinkerUiMenusEnabled = false;
+
 // 根据当前打开的源文件路径生成链接器父菜单项的显示标题（Wide 字符串）。
 // 无源文件时返回通用名；有源文件时返回"[xxxx.e]使用的链接器"。
 std::wstring GetLinkerMenuTitle()
@@ -67,6 +70,12 @@ void UpdateLinkerSubMenuParentItem(HMENU hTargetMenu)
 void RegisterIDEContextMenu()
 {
 	if (g_isContextMenuRegistered) {
+		return;
+	}
+
+	// 静默 MCP 版：禁用 UI 菜单
+	if (!kAutoLinkerUiMenusEnabled) {
+		g_isContextMenuRegistered = true;
 		return;
 	}
 
