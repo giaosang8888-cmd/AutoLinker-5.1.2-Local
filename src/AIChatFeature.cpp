@@ -6694,8 +6694,17 @@ void EnsureTabCreated()
 		return;
 	}
 
-	if (!EnsureChatTabAddedInternal()) {
-		return;
+	// 静默 MCP 版：即使 UI 被禁用，也需要创建 chat dialog 窗口用于工具调用
+	if (kAIChatIdeTabsEnabled) {
+		if (!EnsureChatTabAddedInternal()) {
+			return;
+		}
+	}
+	else {
+		// 静默模式：只创建 dialog 窗口，不添加 Tab
+		if (!EnsureChatHostWindowCreated()) {
+			return;
+		}
 	}
 }
 
