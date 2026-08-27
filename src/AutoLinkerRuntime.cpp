@@ -74,18 +74,39 @@ long long ElapsedMs(const PerfClock::time_point& start)
 void OutputStringToELog(const std::string& szbuf)
 {
 	const std::string line = "[AutoLinker]" + szbuf;
-	// IDE 输出需要 GBK 编码
+	// UTF-8 转 Unicode
 	int utf16Len = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
-	if (utf16Len > 0) {
-		std::wstring utf16(utf16Len - 1, L'\0');
-		MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, utf16.data(), utf16Len);
-		int gbkLen = WideCharToMultiByte(936, 0, utf16.c_str(), -1, nullptr, 0, nullptr, nullptr);
-		if (gbkLen > 0) {
-			std::string gbk(gbkLen - 1, '\0');
-			WideCharToMultiByte(936, 0, utf16.c_str(), -1, gbk.data(), gbkLen, nullptr, nullptr);
-			IDEFacade::Instance().AppendOutputWindowLine(gbk);
-		}
+	if (utf16Len <= 0) {
+		// UTF-8 转 Unicode 失败，直接输出原字符串
+		OutputDebugStringA((line + "\n").c_str());
+		IDEFacade::Instance().AppendOutputWindowLine(line);
+		Logger::Instance().Write("", line);
+		return;
 	}
+	std::wstring utf16(utf16Len - 1, L'\0');
+	if (MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, utf16.data(), utf16Len) <= 0) {
+		OutputDebugStringA((line + "\n").c_str());
+		IDEFacade::Instance().AppendOutputWindowLine(line);
+		Logger::Instance().Write("", line);
+		return;
+	}
+	// Unicode 转 GBK
+	int gbkLen = WideCharToMultiByte(936, 0, utf16.c_str(), -1, nullptr, 0, nullptr, nullptr);
+	if (gbkLen <= 0) {
+		// GBK 转换失败，输出原字符串
+		OutputDebugStringA((line + "\n").c_str());
+		IDEFacade::Instance().AppendOutputWindowLine(line);
+		Logger::Instance().Write("", line);
+		return;
+	}
+	std::string gbk(gbkLen - 1, '\0');
+	if (WideCharToMultiByte(936, 0, utf16.c_str(), -1, gbk.data(), gbkLen, nullptr, nullptr) <= 0) {
+		OutputDebugStringA((line + "\n").c_str());
+		IDEFacade::Instance().AppendOutputWindowLine(line);
+		Logger::Instance().Write("", line);
+		return;
+	}
+	IDEFacade::Instance().AppendOutputWindowLine(gbk);
 	// 日志文件写入 UTF-8
 	OutputDebugStringA((line + "\n").c_str());
 	Logger::Instance().Write("", line);
