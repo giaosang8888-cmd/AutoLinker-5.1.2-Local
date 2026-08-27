@@ -74,16 +74,20 @@ long long ElapsedMs(const PerfClock::time_point& start)
 void OutputStringToELog(const std::string& szbuf)
 {
 	const std::string line = "[AutoLinker]" + szbuf;
-	// 使用宽字符输出到调试器，避免乱码
-	int wideLen = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
-	if (wideLen > 0) {
-		std::wstring wideBuf(wideLen - 1, L'\0');
-		MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, wideBuf.data(), wideLen);
-		OutputDebugStringW(wideBuf.c_str());
+	// IDE 输出需要 GBK 编码
+	int utf16Len = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
+	if (utf16Len > 0) {
+		std::wstring utf16(utf16Len - 1, L'\0');
+		MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, utf16.data(), utf16Len);
+		int gbkLen = WideCharToMultiByte(936, 0, utf16.c_str(), -1, nullptr, 0, nullptr, nullptr);
+		if (gbkLen > 0) {
+			std::string gbk(gbkLen - 1, '\0');
+			WideCharToMultiByte(936, 0, utf16.c_str(), -1, gbk.data(), gbkLen, nullptr, nullptr);
+			IDEFacade::Instance().AppendOutputWindowLine(gbk);
+		}
 	}
-	// 直接输出到 IDE，日志为 UTF-8 编码
-	IDEFacade::Instance().AppendOutputWindowLine(line);
-	// 直接写入日志文件，UTF-8 编码
+	// 日志文件写入 UTF-8
+	OutputDebugStringA((line + "\n").c_str());
 	Logger::Instance().Write("", line);
 }
 
