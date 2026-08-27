@@ -18,18 +18,25 @@ env:
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-2019
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Install Visual Studio 2017 Build Tools
+      run: |
+        choco install visualstudio2017buildtools -y --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --add Microsoft.VisualStudio.Component.VC.MFC.x86"
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
+      env:
+        VSINSTALLDIR: 'C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools'
       run: |
+        & "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvars32.bat"
         msbuild AutoLinker.vcxproj /t:Build /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{env.BUILD_PLATFORM}} /m /v:minimal
 
     - name: Verify Output
