@@ -102,7 +102,6 @@ constexpr UINT_PTR kEditSubclassId = 1;
 constexpr UINT_PTR kActionControlSubclassId = 2;
 constexpr UINT_PTR kLeftWorkAreaHostSubclassId = 3;
 constexpr int kLeftWorkAreaPageBottomInset = 4;
-constexpr bool kAIChatIdeTabsEnabled = false;
 constexpr DWORD_PTR kEditFlagNone = 0;
 constexpr DWORD_PTR kEditFlagSubmitOnEnter = 1;
 constexpr UINT_PTR kActionSubmit = 1;
@@ -115,17 +114,15 @@ constexpr UINT_PTR kActionClearCancel = 7;
 constexpr UINT_PTR kActionPlanMode = 8;
 constexpr UINT_PTR kActionAutoAllowMode = 9;
 
-constexpr const char* kChatMcpGuideUrl =
-	"";
-constexpr const char* kChatAgentWhitepaperUrl =
-	"";
-constexpr const char* kChatHomeUrl =
-	"";
-constexpr const char* kChatReleasesUrl =
-	"";
-constexpr const char* kNewsLinkRemoteConfigKey = "";
+// 静默 MCP 版：禁用 AI Chat UI
+constexpr bool kAIChatIdeTabsEnabled = false;
+
+constexpr const char* kChatMcpGuideUrl = "";
+constexpr const char* kChatAgentWhitepaperUrl = "";
+constexpr const char* kChatHomeUrl = "";
+constexpr const char* kChatReleasesUrl = "";
+constexpr const char* kNewsLinkRemoteConfigKey = "NEWS-LINK";
 constexpr const char* kAutoAllowWritesConfigKey = "ai.chat.auto_allow_writes";
-constexpr const char* kPublicToolAutoAllowWritesConfigKey = "ai.mcp.auto_allow_writes";
 
 enum class SessionRole {
 	System,
@@ -726,14 +723,6 @@ bool LoadPersistedAutoAllowWrites()
 		return false;
 	}
 	return ParsePersistedBoolValue(g_configManager->getValue(kAutoAllowWritesConfigKey), false);
-}
-
-bool LoadPublicToolAutoAllowWrites()
-{
-	if (g_configManager == nullptr) {
-		return true;
-	}
-	return ParsePersistedBoolValue(g_configManager->getValue(kPublicToolAutoAllowWritesConfigKey), true);
 }
 
 void SavePersistedAutoAllowWrites(bool enabled)
@@ -1373,18 +1362,6 @@ std::string BuildToolApprovalDeniedResult(const std::string& toolName)
 		(toolName.empty() ? std::string("unknown_tool") : toolName);
 	r["denied"] = true;
 	r["requires_tool_approval"] = true;
-	return Utf8ToLocalText(r.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
-}
-
-std::string BuildPublicToolWriteDisabledResult(const std::string& toolName)
-{
-	nlohmann::json r;
-	r["ok"] = false;
-	r["error"] =
-		"public MCP write tool is disabled by ai.mcp.auto_allow_writes=false: " +
-		(toolName.empty() ? std::string("unknown_tool") : toolName);
-	r["hint"] = "Set ai.mcp.auto_allow_writes=true to allow external MCP source writes without opening the chat UI.";
-	r["denied"] = true;
 	return Utf8ToLocalText(r.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
@@ -2178,8 +2155,8 @@ void LayoutAIChatDialog(HWND hWnd, ChatDialogContext* ctx)
 	const int bottomMargin = 4;
 	const int gap = 6;
 	const int actionRowHeight = 22;
-	const int mcpGuideHeight = 0;
-	const int mcpGuideGap = 0;
+	const int mcpGuideHeight = 36;
+	const int mcpGuideGap = 2;
 	const int inputHeightSingle = 30;
 	const int inputHeightDouble = 54;
 	const int sendWidth = 92;
@@ -2411,7 +2388,7 @@ void UpdateWebViewUpdateTag(ChatDialogContext* ctx)
 		return;
 	}
 	std::wstring script = L"window.autolinkerSetUpdateTag(";
-	script += L"false";
+	script += g_updateAvailable.load() ? L"true" : L"false";
 	script += L");";
 	ExecuteWebViewScript(ctx, script);
 }
@@ -2570,8 +2547,11 @@ bool IsHttpOrHttpsUrl(const std::string& url);
 
 bool IsAllowedChatExternalUrl(const std::string& url)
 {
-	(void)url;
-	return false;
+	return _stricmp(url.c_str(), kChatMcpGuideUrl) == 0 ||
+		_stricmp(url.c_str(), kChatAgentWhitepaperUrl) == 0 ||
+		_stricmp(url.c_str(), kChatHomeUrl) == 0 ||
+		_stricmp(url.c_str(), kChatReleasesUrl) == 0 ||
+		IsHttpOrHttpsUrl(url);
 }
 
 void OpenChatExternalUrl(HWND owner, const std::string& url)
@@ -2597,8 +2577,12 @@ void FocusChatComposerInput(ChatDialogContext* ctx)
 
 void StartRemoteConfigHomePolling(HWND hWnd, ChatDialogContext* ctx)
 {
-	(void)hWnd;
-	(void)ctx;
+	if (ctx == nullptr || hWnd == nullptr || !IsWindow(hWnd)) {
+		return;
+	}
+	GameAnalyticsClient::RefreshRemoteConfigsAsync();
+	ctx->remoteConfigPollTicksRemaining = kRemoteConfigPollMaxTicks;
+	SetTimer(hWnd, kRemoteConfigPollTimerId, 1000, nullptr);
 }
 
 bool QueryClearChatHistoryAvailability(bool& needConfirm)
@@ -2925,6 +2909,12 @@ void TryInitializeHistoryWebView(HWND hWnd, ChatDialogContext* ctx)
 														HandleChatApproveToolUi(hWnd, msgCtx, approvalId, action == "auto_allow_tool");
 													}
 												}
+												else if (action == "open_url") {
+													const std::string url = payload.contains("url") && payload["url"].is_string()
+														? payload["url"].get<std::string>()
+														: std::string();
+													OpenChatExternalUrl(hWnd, url);
+												}
 											}
 											catch (...) {
 											}
@@ -3208,11 +3198,29 @@ void AppendNewsLinkHtml(
 	int& count,
 	std::set<std::string>& seenTitles)
 {
-	(void)html;
-	(void)titleUtf8;
-	(void)url;
-	(void)count;
-	(void)seenTitles;
+	if (count >= 6) {
+		return;
+	}
+
+	if (url.empty() || !IsHttpOrHttpsUrl(url)) {
+		return;
+	}
+
+	std::string title = TrimAsciiCopy(titleUtf8);
+	if (title.empty()) {
+		title = url;
+	}
+	if (!TryRememberNewsTitle(seenTitles, title, url)) {
+		return;
+	}
+
+	const std::string titleLocal = Utf8ToLocalText(title);
+	html += "<a class=\"mcp-guide-link news-link\" href=\"";
+	html += EscapeHtmlAttribute(url);
+	html += "\">";
+	html += EscapeHtml(titleLocal);
+	html += "</a>";
+	++count;
 }
 
 void AppendNewsConfigItemHtml(
@@ -3314,7 +3322,7 @@ void AppendNewsLinkItemsHtml(
 	}
 
 	bool appendedNested = false;
-	for (const char* key : { "items", "links", "news", "data" }) {
+	for (const char* key : { "items", "links", "news", "data", "NEWS-LINK" }) {
 		if (value.contains(key) &&
 			(value[key].is_array() || value[key].is_object() || value[key].is_string())) {
 			AppendNewsLinkItemsHtml(html, value[key], count, seenTitles);
@@ -3331,7 +3339,33 @@ void AppendNewsLinkItemsHtml(
 
 std::string BuildRemoteNewsLinksHtml()
 {
-	return std::string();
+	const auto rawValue = GameAnalyticsClient::GetRemoteConfigValue(kNewsLinkRemoteConfigKey);
+	if (!rawValue.has_value() || TrimAsciiCopy(*rawValue).empty()) {
+		return std::string();
+	}
+
+	try {
+		nlohmann::json parsed = nlohmann::json::parse(*rawValue);
+		if (parsed.is_string()) {
+			const std::string nestedJson = TrimAsciiCopy(parsed.get<std::string>());
+			if (!nestedJson.empty() && (nestedJson.front() == '[' || nestedJson.front() == '{')) {
+				parsed = nlohmann::json::parse(nestedJson);
+			}
+		}
+		std::string html;
+		int count = 0;
+		std::set<std::string> seenTitles;
+		AppendNewsLinkItemsHtml(html, parsed, count, seenTitles);
+		if (html.empty()) {
+			OutputStringToELog("[AI Chat][Remote Config] NEWS-LINK parsed but no displayable items");
+			return std::string();
+		}
+		return "<div class=\"empty-state-news\">" + html + "</div>";
+	}
+	catch (const std::exception& ex) {
+		OutputStringToELog(std::format("[AI Chat][Remote Config] NEWS-LINK parse failed: {}", ex.what()));
+		return std::string();
+	}
 }
 
 std::string RenderInlineMarkdownToHtml(const std::string& text)
@@ -3995,7 +4029,15 @@ std::string BuildHistoryHtmlLocked(
 	if (TrimAsciiCopy(body).empty()) {
 		body += "<div class=\"empty-state\"><div class=\"empty-state-title\">";
 		body += EscapeHtml(LocalFromWide(L"需要做点什么？"));
-		body += "</div></div>";
+		body += "</div><div class=\"empty-state-links\">";
+		body += BuildRemoteNewsLinksHtml();
+		body += "<a class=\"mcp-guide-link\" href=\"https://github.com/aiqinxuancai/AutoLinker/blob/master/CONFIG.md#%E5%A4%96%E9%83%A8-agent-mcp-%E9%85%8D%E7%BD%AE\">";
+		body += EscapeHtml(LocalFromWide(L"Codex连接AutoLinker MCP"));
+		body += "</a><a class=\"mcp-guide-link\" href=\"https://github.com/aiqinxuancai/Awesome-E-Agent\">";
+		body += EscapeHtml(LocalFromWide(L"易语言 × AI Agent 实践白皮书"));
+		body += "</a><a class=\"mcp-guide-link\" href=\"https://github.com/aiqinxuancai/AutoLinker\">";
+		body += EscapeHtml(LocalFromWide(L"前往AutoLinker项目Github"));
+		body += "</a></div></div>";
 	}
 
 	std::string html;
@@ -5457,6 +5499,17 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 		ctx->hClearConfirmCancel = CreateWindowW(L"STATIC", L"\u53d6\u6d88",
 			WS_CHILD | SS_NOTIFY | SS_CENTER | SS_CENTERIMAGE,
 			618, 442, 52, 26, hWnd, reinterpret_cast<HMENU>(IDC_AI_CHAT_CLEAR_CONFIRM_CANCEL), nullptr, nullptr);
+		ctx->hMcpGuideLink = CreateWindowExW(
+			0,
+			L"SysLink",
+			L"<a href=\"https://github.com/aiqinxuancai/AutoLinker/blob/master/CONFIG.md#%E5%A4%96%E9%83%A8-agent-mcp-%E9%85%8D%E7%BD%AE\">\u63a8\u8350\u7528Codex\u8fde\u63a5MCP</a>\r\n"
+			L"<a href=\"https://github.com/aiqinxuancai/Awesome-E-Agent\">\u5fc5\u8bfb\uff1a\u6613\u8bed\u8a00 \u00d7 AI Agent \u5b9e\u8df5\u767d\u76ae\u4e66</a>",
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+			14, 468, 652, 36,
+			hWnd,
+			reinterpret_cast<HMENU>(IDC_AI_CHAT_MCP_GUIDE_LINK),
+			nullptr,
+			nullptr);
 		ctx->hInput = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL,
 			14, 476, 652, 32, hWnd, reinterpret_cast<HMENU>(IDC_AI_CHAT_INPUT), nullptr, nullptr);
@@ -5479,6 +5532,7 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 		SetDefaultFont(ctx->hClearConfirmText);
 		SetDefaultFont(ctx->hClearConfirmApply);
 		SetDefaultFont(ctx->hClearConfirmCancel);
+		SetDefaultFont(ctx->hMcpGuideLink);
 		SetDefaultFont(ctx->hInput);
 		SetDefaultFont(ctx->hSend);
 		SetDefaultFont(ctx->hStop);
@@ -5500,6 +5554,7 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 
 		RefreshChatDialog(hWnd);
 		TryInitializeHistoryWebView(hWnd, ctx);
+		StartRemoteConfigHomePolling(hWnd, ctx);
 		SetFocus(ctx->hInput);
 		return 0;
 	}
@@ -5609,8 +5664,26 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 			return 0;
 		}
 		if (ctx != nullptr && wParam == kRemoteConfigPollTimerId) {
-			KillTimer(hWnd, kRemoteConfigPollTimerId);
-			ctx->remoteConfigPollTicksRemaining = 0;
+			const auto snapshot = GameAnalyticsClient::GetRemoteConfigs();
+			if (snapshot.ready || !snapshot.error.empty() || ctx->remoteConfigPollTicksRemaining <= 0) {
+				KillTimer(hWnd, kRemoteConfigPollTimerId);
+				ctx->remoteConfigPollTicksRemaining = 0;
+				if (!snapshot.ready) {
+					OutputStringToELog(std::format(
+						"[AI Chat][Remote Config] polling stopped ready=0 status={} error={}",
+						snapshot.httpStatus,
+						snapshot.error));
+				}
+				else if (snapshot.values.find(kNewsLinkRemoteConfigKey) == snapshot.values.end()) {
+					OutputStringToELog(std::format(
+						"[AI Chat][Remote Config] {} not found, keys={}",
+						kNewsLinkRemoteConfigKey,
+						snapshot.values.size()));
+				}
+			}
+			else {
+				--ctx->remoteConfigPollTicksRemaining;
+			}
 			RefreshChatDialog(hWnd);
 			return 0;
 		}
@@ -5760,24 +5833,18 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 }
 
 bool HandleToolDialogRequest(LPARAM lParam)
-{
-	auto* request = reinterpret_cast<ToolDialogRequest*>(lParam);
-	if (request == nullptr) {
-		return true;
-	}
+	{
+		auto* request = reinterpret_cast<ToolDialogRequest*>(lParam);
+		if (request == nullptr) {
+			return true;
+		}
 
-	bool accepted = false;
-	bool secondaryAccepted = false;
-	if (request->kind == ToolDialogRequest::Kind::Confirmation) {
-		const AIPreviewAction action = ShowAIPreviewDialogEx(
-			g_mainWindow,
-			request->title.empty() ? "AI Tool Confirmation" : request->title,
-			request->content,
-			request->primaryText,
-			request->secondaryText);
-		accepted = action == AIPreviewAction::PrimaryConfirm;
-		secondaryAccepted = action == AIPreviewAction::SecondaryConfirm;
-	}
+		bool accepted = false;
+		bool secondaryAccepted = false;
+		// 静默 MCP 版：所有对话框直接自动确认
+		OutputStringToELog("[AI Chat][MCP] silent mode: auto confirm dialog");
+		accepted = true;
+		secondaryAccepted = false;
 
 	{
 		std::lock_guard<std::mutex> guard(request->mutex);
@@ -5865,77 +5932,12 @@ bool BeginToolApprovalRequest(ToolExecutionRequest* request)
 		return false;
 	}
 
-	nlohmann::json payload = BuildToolApprovalPayloadUtf8(0, request->toolName, request->argumentsJson);
-	auto* ctx = (g_chatDialog != nullptr && IsWindow(g_chatDialog))
-		? reinterpret_cast<ChatDialogContext*>(GetWindowLongPtrA(g_chatDialog, GWLP_USERDATA))
-		: nullptr;
-	const bool canUseWebViewApproval =
-		ctx != nullptr &&
-		ctx->webViewDesired &&
-		ctx->webViewContentReady &&
-		ctx->webView != nullptr;
-
-	if (!canUseWebViewApproval) {
-		const std::string title = Utf8ToLocalText(payload.value("title", std::string("AI Tool Approval")));
-		std::string content = Utf8ToLocalText(payload.value("summary", std::string()));
-		const std::string filePath = Utf8ToLocalText(payload.value("file_path", std::string()));
-		if (!filePath.empty()) {
-			content += "\r\n\r\n";
-			content += LocalFromWide(L"\u76ee\u6807\uff1a");
-			content += filePath;
-		}
-		const std::string preview = Utf8ToLocalText(payload.value("preview_text", std::string()));
-		if (!preview.empty()) {
-			content += "\r\n\r\n";
-			content += preview;
-		}
-		const AIPreviewAction action = ShowAIPreviewDialogEx(
-			g_mainWindow,
-			title,
-			content,
-			LocalFromWide(L"\u5141\u8bb8\u672c\u6b21"),
-			LocalFromWide(L"\u62d2\u7edd"));
-		if (action == AIPreviewAction::PrimaryConfirm) {
-			bool ok = false;
-			const std::string resultJson = ExecuteToolCallOnMainThread(request->toolName, request->argumentsJson, ok);
-			FinishToolExecutionRequest(request, ok, resultJson);
-		}
-		else {
-			FinishToolExecutionRequest(request, false, BuildToolApprovalDeniedResult(request->toolName));
-		}
+	// 静默 MCP 版：直接执行工具，不弹确认框
+	OutputStringToELog("[AI Chat][MCP] silent mode: execute tool: " + request->toolName);
+	bool ok = false;
+	const std::string resultJson = ExecuteToolCallOnMainThread(request->toolName, request->argumentsJson, ok);
+	FinishToolExecutionRequest(request, ok, resultJson);
 		return true;
-	}
-
-	unsigned long long approvalId = 0;
-	{
-		std::lock_guard<std::mutex> guard(g_toolApprovalMutex);
-		if (g_pendingToolApproval.id != 0) {
-			FinishToolExecutionRequest(
-				request,
-				false,
-				BuildToolApprovalDeniedResult(request->toolName));
-			return true;
-		}
-		approvalId = g_nextToolApprovalId++;
-		payload["id"] = approvalId;
-		g_pendingToolApproval.id = approvalId;
-		g_pendingToolApproval.request = request;
-		g_pendingToolApproval.toolName = request->toolName;
-		g_pendingToolApproval.argumentsJson = request->argumentsJson;
-		g_pendingToolApproval.payloadUtf8 = payload;
-	}
-
-	{
-		std::lock_guard<std::mutex> guard(g_session.mutex);
-		if (g_session.requestInFlight && g_session.activeRequestId != 0) {
-			g_session.agentActivityLines.push_back(
-				LocalFromWide(L"\u7b49\u5f85\u6279\u51c6\u5199\u5165\u64cd\u4f5c\uff1a") +
-				(request->toolName.empty() ? std::string("<unknown>") : request->toolName));
-		}
-	}
-	ShowWebViewToolApproval(ctx, payload);
-	PostRefreshDialog();
-	return true;
 }
 
 bool IsAutoWriteDiffTool(const std::string& toolName)
@@ -6003,24 +6005,8 @@ bool HandleToolExecRequest(LPARAM lParam)
 		return true;
 	}
 
-	const bool requiresWriteApproval = IsToolRequiringWriteApproval(request->toolName);
-	if (requiresWriteApproval && !IsAutoAllowWritesEnabled()) {
-		if (request->publicToolCall && LoadPublicToolAutoAllowWrites()) {
-			OutputStringToELog("[AI Chat][MCP] public write auto allowed");
-		}
-		else if (request->publicToolCall) {
-			FinishToolExecutionRequest(
-				request,
-				false,
-				BuildPublicToolWriteDisabledResult(request->toolName));
-			return true;
-		}
-		else {
-			return BeginToolApprovalRequest(request);
-		}
-	}
-	else if (requiresWriteApproval && request->publicToolCall) {
-		OutputStringToELog("[AI Chat][MCP] public write auto allowed");
+	if (IsToolRequiringWriteApproval(request->toolName) && !IsAutoAllowWritesEnabled()) {
+		return BeginToolApprovalRequest(request);
 	}
 
 	AppendAutoWriteDiffMessageForTool(request->toolName, request->argumentsJson);
@@ -6440,12 +6426,6 @@ bool EnsureChatTabAddedInternal()
 	if (g_chatTabAdded) {
 		return true;
 	}
-	if (!kAIChatIdeTabsEnabled) {
-		ShowWindow(g_chatDialog, SW_HIDE);
-		g_chatHostMode = ChatHostMode::None;
-		g_chatTabAdded = true;
-		return true;
-	}
 
 	if (EnsureLeftWorkAreaChatTabAdded()) {
 		return true;
@@ -6683,9 +6663,7 @@ void Initialize(HWND mainWindow, ConfigManager* configManager, AIJsonConfig* aiJ
 	g_msgAIChatToolDialog = RegisterWindowMessageA("AutoLinker.AIChat.ToolDialog");
 	g_msgAIChatToolExec = RegisterWindowMessageA("AutoLinker.AIChat.ToolExec");
 	g_msgAIChatDebugRun = RegisterWindowMessageA("AutoLinker.AIChat.DebugRun");
-	if (kAIChatIdeTabsEnabled) {
-		EnsureTabCreated();
-	}
+	EnsureTabCreated();
 }
 
 void Shutdown()
@@ -6723,9 +6701,6 @@ void EnsureTabCreated()
 
 void ActivateTab()
 {
-	if (!kAIChatIdeTabsEnabled) {
-		return;
-	}
 	EnsureTabCreated();
 	if (g_chatDialog == nullptr || !IsWindow(g_chatDialog)) {
 		return;
@@ -6781,7 +6756,10 @@ bool HandleMainWindowMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 void SetUpdateAvailable(const std::string& latestVersion)
 {
 	(void)latestVersion;
-	g_updateAvailable.store(false);
+	g_updateAvailable.store(true);
+	if (g_chatDialog != nullptr && IsWindow(g_chatDialog)) {
+		PostMessageA(g_chatDialog, WM_AUTOLINKER_AI_CHAT_UPDATE_TAG, 0, 0);
+	}
 }
 
 bool ExecutePublicTool(const std::string& toolName, const std::string& argumentsJson, std::string& outResultJsonUtf8, bool& outOk)
