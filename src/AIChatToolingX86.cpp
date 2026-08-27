@@ -443,17 +443,19 @@ bool QueryTreeItemInfoForAI(
 HWND FindProgramDataTreeViewForAI()
 {
 	for (HWND treeHwnd : CollectTreeViewWindowsForAI(GetAIChatMainWindowForTooling())) {
+		// 尝试 Unicode 版本
 		const HTREEITEM rootItem = GetTreeNextItemForAI(treeHwnd, nullptr, TVGN_ROOT);
-		std::string text;
-		LPARAM itemData = 0;
-		int image = -1;
-		int selectedImage = -1;
-		int childCount = 0;
-		if (!QueryTreeItemInfoForAI(treeHwnd, rootItem, text, itemData, image, selectedImage, childCount)) {
-			continue;
-		}
-		if (text == "程序数据") {
-			return treeHwnd;
+		wchar_t textBufW[512] = {};
+		TVITEMW tvItemW = {};
+		tvItemW.mask = TVIF_HANDLE | TVIF_TEXT | TVIF_PARAM | TVIF_CHILDREN | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+		tvItemW.hItem = rootItem;
+		tvItemW.pszText = textBufW;
+		tvItemW.cchTextMax = 511;
+		if (SendMessageW(treeHwnd, TVM_GETITEMW, 0, reinterpret_cast<LPARAM>(&tvItemW)) != FALSE) {
+			// 使用 LocalFromWide 转换
+			if (wcscmp(textBufW, L"程序数据") == 0) {
+				return treeHwnd;
+			}
 		}
 	}
 	return nullptr;
