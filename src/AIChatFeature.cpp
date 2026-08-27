@@ -6696,15 +6696,19 @@ void EnsureTabCreated()
 
 	// 静默 MCP 版：即使 UI 被禁用，也需要创建 chat dialog 窗口用于工具调用
 	if (kAIChatIdeTabsEnabled) {
+		OutputStringToELog("[Silent MCP] kAIChatIdeTabsEnabled=true, calling EnsureChatTabAddedInternal");
 		if (!EnsureChatTabAddedInternal()) {
 			return;
 		}
 	}
 	else {
 		// 静默模式：只创建 dialog 窗口，不添加 Tab
+		OutputStringToELog("[Silent MCP] kAIChatIdeTabsEnabled=false, calling EnsureChatHostWindowCreated");
 		if (!EnsureChatHostWindowCreated()) {
+			OutputStringToELog("[Silent MCP] EnsureChatHostWindowCreated failed");
 			return;
 		}
+		OutputStringToELog("[Silent MCP] chat dialog created, g_chatDialog available");
 	}
 }
 
