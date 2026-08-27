@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/**)",
+      "Read(//Users/sge65k/**)",
+      "mcp__ida-pro-mcp__list_instances"
+    ]
+  }
+}

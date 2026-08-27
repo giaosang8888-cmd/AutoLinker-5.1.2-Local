@@ -1,0 +1,413 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="detours\disasm.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\disolarm.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\disolarm64.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\disolia64.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\disolx64.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\disolx86.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\image.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\modules.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\creatwth.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="detours\detours.cpp">
+      <Filter>detours</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinker.cpp" />
+    <ClCompile Include="src\AutoLinkerAI.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinkerHooks.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinkerMenu.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinkerRuntime.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinkerSupport.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AutoLinkerTestApi.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\EPackagerIntegration.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ConfigManager.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIJsonConfig.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\DependencyCatalogCache.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\EideInternalTextBridge.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\EcSwitchConfigDialog.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ForceLinkLibConfigDialog.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ForceLinkLibManager.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\GameAnalyticsClient.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECOMEx.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\EideProjectBinarySerializer.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\HeadlessCompileRunner.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\IDEFacade.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MemFind.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ModelManager.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MouseBack.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIConfigDialog.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIChatFeature.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIChatSessionStore.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIChatThemeManager.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIChatTooling.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIChatToolingX86.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AIService.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WorkspaceMirror.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WorkspaceFileTools.cpp">
+      <Filter>AI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LocalMcpInstanceRegistry.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Logger.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\PathHelper.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\PageCodeCacheManager.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ResourceTextLoader.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\StringHelper.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Version.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WindowHelper.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WinINetUtil.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\direct_global_search.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LocalMcpServer.cpp" />
+    <ClCompile Include="src\RealPageCodeToolSupport.cpp" />
+    <ClCompile Include="src\PowerShellToolRunner.cpp" />
+    <ClCompile Include="src\TavilyClient.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WebDocumentClient.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WebDocumentExtractor.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="detours\detours.h">
+      <Filter>detours</Filter>
+    </ClInclude>
+    <ClInclude Include="detours\detver.h">
+      <Filter>detours</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\krnllib.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\lang.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\lib2.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\mtypes.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\PublicIDEFunctions.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\untshare.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="elib\fnshare.h">
+      <Filter>elib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AutoLinker.h" />
+    <ClInclude Include="src\AutoLinkerInternal.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AutoLinkerTestApi.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AutoLinkerVersion.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIConfigDialog.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIChatFeature.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIChatSessionStore.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIChatThemeManager.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIChatTooling.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIChatToolingInternal.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIService.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AIJsonConfig.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WorkspaceMirror.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WorkspaceFileTools.h">
+      <Filter>AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ConfigManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\DependencyCatalogCache.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\EPackagerIntegration.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\EcSwitchConfigDialog.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ForceLinkLibConfigDialog.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ForceLinkLibManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\GameAnalyticsClient.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\EideInternalTextBridge.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\EideProjectBinarySerializer.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECOMEx.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Global.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\HeadlessCompileRunner.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\IDEFacade.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\InlineHook.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LinkerManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LocalMcpInstanceRegistry.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Logger.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\MemFind.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ModelManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\MouseBack.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PathHelper.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PageCodeCacheManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resource.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\StringHelper.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\TimeManager.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Version.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WindowHelper.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WinINetUtil.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\direct_global_search.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LocalMcpServer.h" />
+    <ClInclude Include="src\PowerShellToolRunner.h" />
+    <ClInclude Include="src\RealPageCodeToolSupport.h" />
+    <ClInclude Include="src\ResourceTextLoader.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\TavilyClient.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WebDocumentClient.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WebDocumentExtractor.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="elib">
+      <UniqueIdentifier>{139f9248-894c-49dd-ac24-16f409cf5c3d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="detours">
+      <UniqueIdentifier>{bccb807d-f223-4bcd-b7e9-ed0546a6e408}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Utils">
+      <UniqueIdentifier>{50cb1a3e-5558-4bc2-bed4-ebfa7f5b25bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="AI">
+      <UniqueIdentifier>{8f66752d-42c3-4fe5-bd47-3a07ff6b07b7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\AutoLinker.def" />
+    <None Include="package.json">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="scripts\build_ai_config_webview.mjs">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="tailwind.config.js">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_chat_history.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_chat_theme_config_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_chat_theme_config_dialog.src.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_config_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_config_dialog.src.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_config_dialog.tailwind.css">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ai_preview_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\linker_config_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\linker_config_dialog.src.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ec_switch_config_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\ec_switch_config_dialog.src.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\force_link_lib_config_dialog.html">
+      <Filter>AI</Filter>
+    </None>
+    <None Include="src\webview\force_link_lib_config_dialog.src.html">
+      <Filter>AI</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\AutoLinker.rc">
+      <Filter>Utils</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

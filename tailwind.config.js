@@ -1,0 +1,19 @@
+﻿module.exports = {
+  content: [
+    "./src/webview/ai_config_dialog.src.html",
+    "./src/webview/linker_config_dialog.src.html",
+    "./src/webview/ec_switch_config_dialog.src.html",
+    "./src/webview/force_link_lib_config_dialog.src.html",
+    "./src/webview/ai_chat_theme_config_dialog.src.html"
+  ],
+  safelist: ["block"],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Microsoft YaHei UI"', '"Segoe UI"', "Arial", "sans-serif"],
+        mono: ["Consolas", '"Courier New"', "monospace"]
+      }
+    }
+  },
+  plugins: []
+};
