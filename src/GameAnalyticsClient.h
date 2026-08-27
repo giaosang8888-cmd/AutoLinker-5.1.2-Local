@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "..\\thirdparty\\json.hpp"
-
 class ConfigManager;
 
 namespace GameAnalyticsClient {
@@ -44,8 +42,6 @@ RemoteConfigSnapshot GetRemoteConfigs();
 std::optional<std::string> GetRemoteConfigValue(const std::string& key);
 
 // 构建不依赖网络的自检报告。
-	std::string BuildSelfTestReportJson();
+std::string BuildSelfTestReportJson();
 
 } // namespace GameAnalyticsClient
-
-// 纯本地版本，不需要完整头文件

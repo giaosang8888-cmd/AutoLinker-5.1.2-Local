@@ -12,5 +12,4 @@ std::string ExecuteToolCall(
 	const std::string& argumentsJson,
 	bool& outOk,
 	bool enableLog = true,
-	const std::function<bool()>& cancelCallback = {},
-	bool publicToolCall = false);
+	const std::function<bool()>& cancelCallback = {});

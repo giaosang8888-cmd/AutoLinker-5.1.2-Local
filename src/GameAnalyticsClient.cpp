@@ -35,7 +35,7 @@ namespace {
 
 constexpr const char* kGameKey = "38499c977724e8cf1c4286d4dc987864";
 constexpr const char* kSecretKey = "eae352d617a567f5bae193cf7c7661593a1db67b";
-constexpr const char* kApiBaseUrl = "";
+constexpr const char* kApiBaseUrl = "https://api.gameanalytics.com";
 constexpr const char* kSdkVersion = "rest api v2";
 constexpr const char* kPlatform = "windows";
 constexpr const char* kManufacturer = "microsoft";
@@ -844,7 +844,7 @@ bool ParseRemoteConfigExampleOk()
 		{"configs", nlohmann::json::array({
 			{{"key", "feature_enabled"}, {"value", "true"}, {"type", "string"}, {"end_ts", nullptr}},
 			{{"key", "sample_rate"}, {"value", "50"}, {"type", "number"}},
-			{{"key", "REMOTE_CONFIG_DISABLED"}, {"value", R"([{"title":"AutoLinker","url":""}])"}, {"type", "json"}}
+			{{"key", "NEWS-LINK"}, {"value", R"([{"title":"AutoLinker","url":"https://github.com/aiqinxuancai/AutoLinker"}])"}, {"type", "json"}}
 		})}
 	};
 	UpdateRemoteSnapshotSuccess(201, sample);
@@ -857,7 +857,7 @@ bool ParseRemoteConfigExampleOk()
 		snapshot.values.size() == 3 &&
 		snapshot.values.at("feature_enabled") == "true" &&
 		snapshot.values.at("sample_rate") == "50" &&
-		snapshot.values.at("REMOTE_CONFIG_DISABLED").find("AutoLinker") != std::string::npos;
+		snapshot.values.at("NEWS-LINK").find("AutoLinker") != std::string::npos;
 }
 
 bool LifecycleEventFormatOk()
@@ -871,7 +871,7 @@ bool LifecycleEventFormatOk()
 	g_state.sessionNum = 1;
 	g_state.osVersion = "windows 10.0.0";
 	g_state.sessionStartUnix = UnixTimeSeconds() - 3;
-	g_state.remoteConfigs.values["REMOTE_CONFIG_DISABLED"] = R"([{"title":"AutoLinker"}])";
+	g_state.remoteConfigs.values["NEWS-LINK"] = R"([{"title":"AutoLinker"}])";
 
 	const nlohmann::json startup = BuildStartupEventLocked();
 	const nlohmann::json sessionEnd = BuildSessionEndEventLocked();

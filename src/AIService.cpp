@@ -1670,6 +1670,62 @@ nlohmann::json BuildPublicToolCatalog()
 			{"additionalProperties", false}
 		}}
 	});
+	tools.push_back({
+		{"name", "run_powershell_command"},
+		{"description", "Run one PowerShell command on the local machine after explicit user confirmation."},
+		{"inputSchema", {
+			{"type", "object"},
+			{"properties", {
+				{"command", {{"type", "string"}}},
+				{"working_directory", {{"type", "string"}}},
+				{"timeout_seconds", {{"type", "integer"}, {"minimum", 1}, {"maximum", 600}}}
+			}},
+			{"required", nlohmann::json::array({"command"})},
+			{"additionalProperties", false}
+		}}
+	});
+	tools.push_back({
+		{"name", "search_web_tavily"},
+		{"description", "Search the public web via Tavily and return normalized result snippets."},
+		{"inputSchema", {
+			{"type", "object"},
+			{"properties", {
+				{"query", {{"type", "string"}}},
+				{"max_results", {{"type", "integer"}, {"minimum", 1}, {"maximum", 10}}},
+				{"topic", {{"type", "string"}}}
+			}},
+			{"required", nlohmann::json::array({"query"})},
+			{"additionalProperties", false}
+		}}
+	});
+	tools.push_back({
+		{"name", "fetch_url"},
+		{"description", "Fetch one URL via HTTP GET and return normalized text response plus basic HTTP metadata."},
+		{"inputSchema", {
+			{"type", "object"},
+			{"properties", {
+				{"url", {{"type", "string"}}},
+				{"timeout_seconds", {{"type", "integer"}, {"minimum", 1}, {"maximum", 300}}},
+				{"max_bytes", {{"type", "integer"}, {"minimum", 4096}, {"maximum", 2097152}}}
+			}},
+			{"required", nlohmann::json::array({"url"})},
+			{"additionalProperties", false}
+		}}
+	});
+	tools.push_back({
+		{"name", "extract_web_document"},
+		{"description", "Fetch one web page or text document and extract readable plain-text content, title and a small set of links."},
+		{"inputSchema", {
+			{"type", "object"},
+			{"properties", {
+				{"url", {{"type", "string"}}},
+				{"timeout_seconds", {{"type", "integer"}, {"minimum", 1}, {"maximum", 300}}},
+				{"max_bytes", {{"type", "integer"}, {"minimum", 4096}, {"maximum", 2097152}}}
+			}},
+			{"required", nlohmann::json::array({"url"})},
+			{"additionalProperties", false}
+		}}
+	});
 	NormalizeJsonStringsToUtf8InPlace(tools);
 	return tools;
 }
@@ -2031,6 +2087,18 @@ std::vector<std::string> SelectGeminiToolNames(
 		AddUniqueToolName(names, "diff_file");
 		AddUniqueToolName(names, "restore_file_snapshot");
 	};
+	const auto addWebTools = [&names]() {
+		AddUniqueToolName(names, "fetch_url");
+		AddUniqueToolName(names, "extract_web_document");
+	};
+
+	if (ContainsAnyText(text, { "fetch_url", "extract_web_document", "http://", "https://", "URL", "url", "网页", "文档", "联网" })) {
+		addWebTools();
+	}
+	if (ContainsAnyText(text, { "search_web_tavily", "搜索网页", "公网", "最新", "官网" })) {
+		AddUniqueToolName(names, "search_web_tavily");
+		addWebTools();
+	}
 	if (ContainsAnyText(text, { "compile_with_output_path", "编译", "构建", "build", "MSBuild" })) {
 		AddUniqueToolName(names, "get_current_eide_info");
 		AddUniqueToolName(names, "compile_with_output_path");
@@ -2071,6 +2139,10 @@ std::vector<std::string> SelectGeminiToolNames(
 			AddUniqueToolName(names, "add_support_library_to_project");
 		}
 	}
+	if (ContainsAnyText(text, { "PowerShell", "powershell", "命令行", "执行命令" })) {
+		AddUniqueToolName(names, "run_powershell_command");
+	}
+
 	if (names.empty()) {
 		addCoreReadTools();
 		addFileReadTools();
@@ -2174,7 +2246,8 @@ std::string BuildChatSystemPrompt(const AISettings& settings)
 			"15) 除非用户明确要求搜索、刷新、列出、添加或移除模块/支持库，否则不要调用 refresh_dependency_catalog、search_available_modules、search_available_support_libraries、list_imported_modules、add_module_to_project、remove_module_from_project、add_support_library_to_project。\n\n"
 			"其他工具：\n"
 			"- 需要确认当前页名/页类型时用 get_current_page_info，不要臆测当前页。\n"
-			"- 本静默 MCP 版不在易语言 IDE 进程内执行 PowerShell；本地命令由外部 Codex Shell 执行。\n\n"
+			"- 涉及联网、查文档、搜最新资料时用 search_web_tavily 搜索、extract_web_document 取正文、fetch_url 取原始响应。\n"
+			"- 需要本地命令时用 run_powershell_command（会经用户确认后执行）。\n\n"
 			"计划模式：\n"
 			"- 如果上下文系统消息说明当前处于计划模式，只能探索、阅读、搜索和制定方案，不要写入文件、回滚、编译或执行 PowerShell。\n"
 			"- 计划准备好时，必须用单独的 <proposed_plan>...</proposed_plan> 块提交方案，等待用户批准后再实施。\n"
@@ -2219,7 +2292,7 @@ std::string BuildGeminiChatSystemPrompt(const AISettings& settings, bool minimal
 		"你是 AutoLinker 内置的易语言项目助手。\n"
 		"回答要直接、准确，优先使用已提供的工具获取工程上下文。\n"
 		"不要臆测当前页面、模块、支持库或源码内容。\n"
-		"Silent MCP build keeps web fetch/search out of the IDE process.\n"
+		"如果需要读取网页或文档，优先调用 extract_web_document；需要原始响应时调用 fetch_url。\n"
 		"除非用户明确要求搜索、刷新、列出、添加或移除模块/支持库，否则不要调用依赖管理工具。\n"
 		"如果工具不可用或调用失败，说明限制并基于已有信息继续。\n"
 		"只输出对用户有用的结果，不输出内部推理过程。\n";

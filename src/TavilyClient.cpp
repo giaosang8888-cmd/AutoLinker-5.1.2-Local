@@ -8,7 +8,7 @@
 #include "WinINetUtil.h"
 
 namespace {
-constexpr const char* kTavilySearchEndpoint = "";
+constexpr const char* kTavilySearchEndpoint = "https://api.tavily.com/search";
 
 std::string TrimAscii(const std::string& text)
 {

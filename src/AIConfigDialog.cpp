@@ -945,6 +945,7 @@ struct AIConfigPresetSite {
 	AIProtocolType protocol;
 };
 
+constexpr const char* kRightPresetModels[] = { "gpt-5.5", "gpt-5.4", "gpt-5.4-mini" };
 constexpr const char* kDeepseekPresetModels[] = { "deepseek-v4-flash", "deepseek-v4-pro" };
 constexpr const char* kZhipuPresetModels[] = { "glm-5.2", "glm-5-turbo", "glm-4.7", "glm-4.5-air" };
 constexpr const char* kQwenPresetModels[] = { "qwen3.7-plus", "qwen3.7-max", "qwen3.6-flash", "qwen3-coder-next", "qwen3-coder-plus" };
@@ -960,6 +961,7 @@ constexpr const char* kGeminiPresetModels[] = { "gemini-3.1-pro-preview", "gemin
 #define AI_PRESET_MODELS(name) name, std::size(name)
 
 constexpr AIConfigPresetSite kAIConfigPresetSites[] = {
+	{ L"Right",            "https://right.codes/codex",                         AI_PRESET_MODELS(kRightPresetModels),        AIProtocolType::OpenAI },
 	{ L"Deepseek",         "https://api.deepseek.com",                          AI_PRESET_MODELS(kDeepseekPresetModels),     AIProtocolType::OpenAI },
 	{ L"\u667A\u8C31",     "https://open.bigmodel.cn/api/paas/v4",              AI_PRESET_MODELS(kZhipuPresetModels),        AIProtocolType::OpenAI },
 	{ L"\u5343\u95EE",     "https://dashscope.aliyuncs.com/compatible-mode/v1", AI_PRESET_MODELS(kQwenPresetModels),         AIProtocolType::OpenAI },
@@ -1634,6 +1636,26 @@ LRESULT CALLBACK AIConfigDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 			120, 216, 180, 220, hWnd, reinterpret_cast<HMENU>(IDC_CFG_SOURCE_EDIT_MODE), nullptr, nullptr);
 		PopulateSourceEditModeCombo(ctx->hSourceEditMode, ctx->settings->sourceEditMode);
 
+		const std::wstring getKeyLinkText =
+			L"<a href=\"https://right.codes/register?aff=3dc87885\">从转发平台获取Key</a>";
+		HWND hGetKeyLink = CreateWindowExW(0, L"SysLink",
+			getKeyLinkText.c_str(),
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+			330, 184, 240, 22, hWnd, reinterpret_cast<HMENU>(IDC_CFG_GET_KEY_LINK), nullptr, nullptr);
+		if (hGetKeyLink != nullptr) {
+			ctx->useNativeLink = true;
+			ctx->hGetKeyLink = hGetKeyLink;
+		}
+		else {
+			ctx->useNativeLink = false;
+			ctx->hGetKeyLink = CreateWindowW(
+				L"STATIC",
+				L"\u4ECE\u8F6C\u53D1\u5E73\u53F0\u83B7\u53D6Key",
+				WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY,
+				330, 184, 240, 22, hWnd, reinterpret_cast<HMENU>(IDC_CFG_GET_KEY_LINK), nullptr, nullptr);
+			hGetKeyLink = ctx->hGetKeyLink;
+		}
+
 		HWND hTavilyApiKeyLabel = CreateWindowA("STATIC", "Tavily Key(Global):", WS_CHILD | WS_VISIBLE,
 			16, 248, 100, 20, hWnd, nullptr, nullptr, nullptr);
 		ctx->hTavilyApiKey = CreateWindowExA(0, "EDIT", ctx->settings->tavilyApiKey.c_str(),
@@ -1840,6 +1862,11 @@ LRESULT CALLBACK AIConfigDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 			return 0;
 		}
 
+		if (id == IDC_CFG_GET_KEY_LINK && HIWORD(wParam) == STN_CLICKED) {
+			ShellExecuteA(hWnd, "open", "https://right.codes/register?aff=3dc87885", nullptr, nullptr, SW_SHOWNORMAL);
+			return 0;
+		}
+
 		if (id == IDC_CFG_CANCEL) {
 			ctx->accepted = false;
 			DestroyWindow(hWnd);
@@ -1850,6 +1877,11 @@ LRESULT CALLBACK AIConfigDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 
 	case WM_NOTIFY: {
 		const NMHDR* hdr = reinterpret_cast<const NMHDR*>(lParam);
+		if (hdr != nullptr && ctx != nullptr && ctx->useNativeLink && hdr->idFrom == IDC_CFG_GET_KEY_LINK &&
+			(hdr->code == NM_CLICK || hdr->code == NM_RETURN)) {
+			ShellExecuteA(hWnd, "open", "https://right.codes/register?aff=3dc87885", nullptr, nullptr, SW_SHOWNORMAL);
+			return 0;
+		}
 		break;
 	}
 
@@ -2171,6 +2203,13 @@ void StartAIConfigWebView(HWND hWnd, AIConfigWebViewDialogContext* ctx)
 											}
 											else if (action == "cancel") {
 												DestroyWindow(hWnd);
+											}
+											else if (action == "open_url") {
+												const std::string openUrl = payload.value("url", "");
+												if (!openUrl.empty() &&
+													(openUrl.rfind("https://", 0) == 0 || openUrl.rfind("http://", 0) == 0)) {
+													ShellExecuteA(hWnd, "open", openUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+												}
 											}
 										}
 										catch (...) {

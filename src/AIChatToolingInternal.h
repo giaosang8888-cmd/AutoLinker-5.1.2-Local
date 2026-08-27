@@ -16,7 +16,6 @@ struct ToolExecutionRequest {
 	std::string resultJson;
 	bool ok = false;
 	bool done = false;
-	bool publicToolCall = false; // 来自 Local MCP/无头公共入口的工具调用。
 	std::mutex mutex;
 	std::condition_variable cv;
 };
