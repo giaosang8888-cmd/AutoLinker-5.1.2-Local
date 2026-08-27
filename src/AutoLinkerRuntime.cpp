@@ -74,42 +74,12 @@ long long ElapsedMs(const PerfClock::time_point& start)
 void OutputStringToELog(const std::string& szbuf)
 {
 	const std::string line = "[AutoLinker]" + szbuf;
-	// UTF-8 转 Unicode
-	int utf16Len = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
-	if (utf16Len <= 0) {
-		// UTF-8 转 Unicode 失败，直接输出原字符串
-		OutputDebugStringA((line + "\n").c_str());
-		IDEFacade::Instance().AppendOutputWindowLine(line);
-		Logger::Instance().Write("", line);
-		return;
-	}
-	std::wstring utf16(utf16Len - 1, L'\0');
-	if (MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, utf16.data(), utf16Len) <= 0) {
-		OutputDebugStringA((line + "\n").c_str());
-		IDEFacade::Instance().AppendOutputWindowLine(line);
-		Logger::Instance().Write("", line);
-		return;
-	}
-	// Unicode 转 GBK
-	int gbkLen = WideCharToMultiByte(936, 0, utf16.c_str(), -1, nullptr, 0, nullptr, nullptr);
-	if (gbkLen <= 0) {
-		// GBK 转换失败，输出原字符串
-		OutputDebugStringA((line + "\n").c_str());
-		IDEFacade::Instance().AppendOutputWindowLine(line);
-		Logger::Instance().Write("", line);
-		return;
-	}
-	std::string gbk(gbkLen - 1, '\0');
-	if (WideCharToMultiByte(936, 0, utf16.c_str(), -1, gbk.data(), gbkLen, nullptr, nullptr) <= 0) {
-		OutputDebugStringA((line + "\n").c_str());
-		IDEFacade::Instance().AppendOutputWindowLine(line);
-		Logger::Instance().Write("", line);
-		return;
-	}
-	IDEFacade::Instance().AppendOutputWindowLine(gbk);
-	// 日志文件写入 UTF-8
+	const std::string ideLine = line.size() <= 256 * 1024
+		? line
+		: line.substr(0, 256 * 1024) + "\r\n[AutoLinker] 单条输出过长，IDE 窗口已截断，完整内容已写入日志文件。";
 	OutputDebugStringA((line + "\n").c_str());
-	Logger::Instance().Write("", line);
+	IDEFacade::Instance().AppendOutputWindowLine(ideLine);
+	Logger::Instance().WriteGbk(line);
 }
 
 std::string NormalizeSourcePathForRuntime(const std::string& text)
