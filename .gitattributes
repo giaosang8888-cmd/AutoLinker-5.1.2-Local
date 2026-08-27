@@ -1,10 +1,13 @@
 ###############################################################################
-# Set default behavior to automatically normalize line endings.
+# 禁用文本自动规范化，防止破坏 UTF-8 编码的源文件
 ###############################################################################
-* text=auto
-
-###############################################################################
-# Set default behavior for command prompt diff.
+*.cpp binary
+*.h binary
+*.c binary
+*.hpp binary
+*.vcxproj binary
+*.sln binary
+*
 #
 # This is need for earlier builds of msysgit that does not have it on by
 # default for csharp files.
