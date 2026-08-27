@@ -114,13 +114,14 @@ constexpr UINT_PTR kActionClearCancel = 7;
 constexpr UINT_PTR kActionPlanMode = 8;
 constexpr UINT_PTR kActionAutoAllowMode = 9;
 
-// 静默 MCP 版：禁用 AI Chat UI
-constexpr bool kAIChatIdeTabsEnabled = false;
-
-constexpr const char* kChatMcpGuideUrl = "";
-constexpr const char* kChatAgentWhitepaperUrl = "";
-constexpr const char* kChatHomeUrl = "";
-constexpr const char* kChatReleasesUrl = "";
+constexpr const char* kChatMcpGuideUrl =
+	"https://github.com/aiqinxuancai/AutoLinker/blob/master/CONFIG.md#%E5%A4%96%E9%83%A8-agent-mcp-%E9%85%8D%E7%BD%AE";
+constexpr const char* kChatAgentWhitepaperUrl =
+	"https://github.com/aiqinxuancai/Awesome-E-Agent";
+constexpr const char* kChatHomeUrl =
+	"https://github.com/aiqinxuancai/AutoLinker";
+constexpr const char* kChatReleasesUrl =
+	"https://github.com/aiqinxuancai/AutoLinker/releases";
 constexpr const char* kNewsLinkRemoteConfigKey = "NEWS-LINK";
 constexpr const char* kAutoAllowWritesConfigKey = "ai.chat.auto_allow_writes";
 
@@ -5833,18 +5834,24 @@ LRESULT CALLBACK AIChatDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 }
 
 bool HandleToolDialogRequest(LPARAM lParam)
-	{
-		auto* request = reinterpret_cast<ToolDialogRequest*>(lParam);
-		if (request == nullptr) {
-			return true;
-		}
+{
+	auto* request = reinterpret_cast<ToolDialogRequest*>(lParam);
+	if (request == nullptr) {
+		return true;
+	}
 
-		bool accepted = false;
-		bool secondaryAccepted = false;
-		// 静默 MCP 版：所有对话框直接自动确认
-		OutputStringToELog("[AI Chat][MCP] silent mode: auto confirm dialog");
-		accepted = true;
-		secondaryAccepted = false;
+	bool accepted = false;
+	bool secondaryAccepted = false;
+	if (request->kind == ToolDialogRequest::Kind::Confirmation) {
+		const AIPreviewAction action = ShowAIPreviewDialogEx(
+			g_mainWindow,
+			request->title.empty() ? "AI Tool Confirmation" : request->title,
+			request->content,
+			request->primaryText,
+			request->secondaryText);
+		accepted = action == AIPreviewAction::PrimaryConfirm;
+		secondaryAccepted = action == AIPreviewAction::SecondaryConfirm;
+	}
 
 	{
 		std::lock_guard<std::mutex> guard(request->mutex);
@@ -5932,12 +5939,77 @@ bool BeginToolApprovalRequest(ToolExecutionRequest* request)
 		return false;
 	}
 
-	// 静默 MCP 版：直接执行工具，不弹确认框
-	OutputStringToELog("[AI Chat][MCP] silent mode: execute tool: " + request->toolName);
-	bool ok = false;
-	const std::string resultJson = ExecuteToolCallOnMainThread(request->toolName, request->argumentsJson, ok);
-	FinishToolExecutionRequest(request, ok, resultJson);
+	nlohmann::json payload = BuildToolApprovalPayloadUtf8(0, request->toolName, request->argumentsJson);
+	auto* ctx = (g_chatDialog != nullptr && IsWindow(g_chatDialog))
+		? reinterpret_cast<ChatDialogContext*>(GetWindowLongPtrA(g_chatDialog, GWLP_USERDATA))
+		: nullptr;
+	const bool canUseWebViewApproval =
+		ctx != nullptr &&
+		ctx->webViewDesired &&
+		ctx->webViewContentReady &&
+		ctx->webView != nullptr;
+
+	if (!canUseWebViewApproval) {
+		const std::string title = Utf8ToLocalText(payload.value("title", std::string("AI Tool Approval")));
+		std::string content = Utf8ToLocalText(payload.value("summary", std::string()));
+		const std::string filePath = Utf8ToLocalText(payload.value("file_path", std::string()));
+		if (!filePath.empty()) {
+			content += "\r\n\r\n";
+			content += LocalFromWide(L"\u76ee\u6807\uff1a");
+			content += filePath;
+		}
+		const std::string preview = Utf8ToLocalText(payload.value("preview_text", std::string()));
+		if (!preview.empty()) {
+			content += "\r\n\r\n";
+			content += preview;
+		}
+		const AIPreviewAction action = ShowAIPreviewDialogEx(
+			g_mainWindow,
+			title,
+			content,
+			LocalFromWide(L"\u5141\u8bb8\u672c\u6b21"),
+			LocalFromWide(L"\u62d2\u7edd"));
+		if (action == AIPreviewAction::PrimaryConfirm) {
+			bool ok = false;
+			const std::string resultJson = ExecuteToolCallOnMainThread(request->toolName, request->argumentsJson, ok);
+			FinishToolExecutionRequest(request, ok, resultJson);
+		}
+		else {
+			FinishToolExecutionRequest(request, false, BuildToolApprovalDeniedResult(request->toolName));
+		}
 		return true;
+	}
+
+	unsigned long long approvalId = 0;
+	{
+		std::lock_guard<std::mutex> guard(g_toolApprovalMutex);
+		if (g_pendingToolApproval.id != 0) {
+			FinishToolExecutionRequest(
+				request,
+				false,
+				BuildToolApprovalDeniedResult(request->toolName));
+			return true;
+		}
+		approvalId = g_nextToolApprovalId++;
+		payload["id"] = approvalId;
+		g_pendingToolApproval.id = approvalId;
+		g_pendingToolApproval.request = request;
+		g_pendingToolApproval.toolName = request->toolName;
+		g_pendingToolApproval.argumentsJson = request->argumentsJson;
+		g_pendingToolApproval.payloadUtf8 = payload;
+	}
+
+	{
+		std::lock_guard<std::mutex> guard(g_session.mutex);
+		if (g_session.requestInFlight && g_session.activeRequestId != 0) {
+			g_session.agentActivityLines.push_back(
+				LocalFromWide(L"\u7b49\u5f85\u6279\u51c6\u5199\u5165\u64cd\u4f5c\uff1a") +
+				(request->toolName.empty() ? std::string("<unknown>") : request->toolName));
+		}
+	}
+	ShowWebViewToolApproval(ctx, payload);
+	PostRefreshDialog();
+	return true;
 }
 
 bool IsAutoWriteDiffTool(const std::string& toolName)
@@ -6694,17 +6766,8 @@ void EnsureTabCreated()
 		return;
 	}
 
-	// 静默 MCP 版：即使 UI 被禁用，也需要创建 chat dialog 窗口用于工具调用
-	if (kAIChatIdeTabsEnabled) {
-		if (!EnsureChatTabAddedInternal()) {
-			return;
-		}
-	}
-	else {
-		// 静默模式：只创建 dialog 窗口，不添加 Tab
-		if (!EnsureChatHostWindowCreated()) {
-			return;
-		}
+	if (!EnsureChatTabAddedInternal()) {
+		return;
 	}
 }
 

@@ -5,6 +5,9 @@
 #include "Global.h"
 #include "Logger.h"
 #include "PowerShellToolRunner.h"
+#include "TavilyClient.h"
+#include "WebDocumentClient.h"
+#include "WebDocumentExtractor.h"
 
 #include <Windows.h>
 
@@ -406,8 +409,7 @@ bool RequestToolExecutionFromMainThread(
 	const std::string& toolName,
 	const std::string& argumentsJson,
 	std::string& outResultJson,
-	bool& outOk,
-	bool publicToolCall)
+	bool& outOk)
 {
 	outResultJson.clear();
 	outOk = false;
@@ -420,7 +422,6 @@ bool RequestToolExecutionFromMainThread(
 	ToolExecutionRequest request;
 	request.toolName = toolName;
 	request.argumentsJson = argumentsJson;
-	request.publicToolCall = publicToolCall;
 
 	const auto dispatchStart = std::chrono::steady_clock::now();
 	const DWORD mainThreadId = GetWindowThreadProcessId(mainWindow, nullptr);
@@ -464,28 +465,221 @@ std::string ExecuteToolCallImpl(
 	const std::string& toolName,
 	const std::string& argumentsJson,
 	bool& outOk,
-	bool publicToolCall,
 	const std::function<bool()>& cancelCallback)
 {
 	outOk = false;
 
 	if (toolName == "run_powershell_command") {
+		std::string commandUtf8;
+		std::string workingDirectoryUtf8;
+		int timeoutSeconds = 60;
+		try {
+			const nlohmann::json args = nlohmann::json::parse(argumentsJson);
+			if (args.contains("command") && args["command"].is_string()) {
+				commandUtf8 = args["command"].get<std::string>();
+			}
+			if (args.contains("working_directory") && args["working_directory"].is_string()) {
+				workingDirectoryUtf8 = args["working_directory"].get<std::string>();
+			}
+			if (args.contains("timeout_seconds") && args["timeout_seconds"].is_number_integer()) {
+				timeoutSeconds = (std::clamp)(args["timeout_seconds"].get<int>(), 1, 600);
+			}
+		}
+		catch (const std::exception& ex) {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["error"] = std::string("invalid arguments json: ") + ex.what();
+			return JsonToLocalText(r);
+		}
+
+		if (TrimAsciiCopy(commandUtf8).empty()) {
+			return R"({"ok":false,"error":"command is required"})";
+		}
+
+		std::string confirmationText =
+			std::string("即将执行 PowerShell 命令：\r\n\r\n") +
+			Utf8ToLocalText(commandUtf8) +
+			"\r\n\r\n工作目录：\r\n" +
+			(TrimAsciiCopy(workingDirectoryUtf8).empty() ? std::string("(当前进程目录)") : Utf8ToLocalText(workingDirectoryUtf8)) +
+			"\r\n\r\n超时：\r\n" +
+			std::to_string(timeoutSeconds) +
+			" 秒\r\n\r\n请确认该命令不会造成你不希望的本机副作用。";
+		bool accepted = false;
+		bool secondaryAccepted = false;
+		const bool skipConfirm = g_psAllowAllForProcess.load();
+		if (!skipConfirm) {
+			if (!RequestConfirmationForTooling(
+					LocalFromWide(L"AI PowerShell 执行确认"),
+					confirmationText,
+					LocalFromWide(L"执行"),
+					LocalFromWide(L"当前进程全允许并执行"),
+					accepted,
+					secondaryAccepted) ||
+				(!accepted && !secondaryAccepted)) {
+				nlohmann::json r;
+				r["ok"] = false;
+				r["cancelled"] = true;
+				r["error"] = "user cancelled powershell execution";
+				return JsonToLocalText(r);
+			}
+			if (secondaryAccepted) {
+				g_psAllowAllForProcess.store(true);
+			}
+		}
+
+		const PowerShellRunResult runResult = PowerShellToolRunner::Run(commandUtf8, workingDirectoryUtf8, timeoutSeconds, cancelCallback);
 		nlohmann::json r;
-		r["ok"] = false;
-		r["disabled"] = true;
-		r["error"] = "run_powershell_command disabled in silent MCP build to avoid IDE-hosted process instability";
-		r["hint"] = "Use the external Codex shell for local PowerShell tasks; AutoLinker MCP source read/write tools are unchanged.";
+		r["ok"] = runResult.ok;
+		r["cancelled"] = runResult.cancelled;
+		r["command"] = commandUtf8;
+		r["working_directory"] = runResult.effectiveWorkingDirectory;
+		r["stdout"] = runResult.stdOut;
+		r["stderr"] = runResult.stdErr;
+		r["exit_code"] = runResult.exitCode;
+		r["timed_out"] = runResult.timedOut;
+		if (runResult.cancelled) {
+			r["error"] = "powershell execution cancelled by user";
+		}
+		if (!runResult.error.empty()) {
+			r["error"] = runResult.error;
+		}
+		outOk = runResult.ok;
 		return JsonToLocalText(r);
 	}
 
-	if (toolName == "search_web_tavily" ||
-		toolName == "fetch_url" ||
-		toolName == "extract_web_document") {
+	if (toolName == "search_web_tavily") {
+		std::string queryUtf8;
+		std::string topicUtf8;
+		int maxResults = 5;
+		try {
+			const nlohmann::json args = nlohmann::json::parse(argumentsJson);
+			if (args.contains("query") && args["query"].is_string()) {
+				queryUtf8 = args["query"].get<std::string>();
+			}
+			if (args.contains("topic") && args["topic"].is_string()) {
+				topicUtf8 = args["topic"].get<std::string>();
+			}
+			if (args.contains("max_results") && args["max_results"].is_number_integer()) {
+				maxResults = (std::clamp)(args["max_results"].get<int>(), 1, 10);
+			}
+		}
+		catch (const std::exception& ex) {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["error"] = std::string("invalid arguments json: ") + ex.what();
+			return JsonToLocalText(r);
+		}
+
+		AISettings settings = {};
+		std::string tavilyApiKey;
+		AIJsonConfig* aiJsonConfig  = GetAIChatAIJsonConfigForTooling();
+		ConfigManager* configManager = GetAIChatConfigManagerForTooling();
+		if (aiJsonConfig != nullptr && AIService::LoadSettings(*aiJsonConfig, configManager, settings)) {
+			tavilyApiKey = LocalToUtf8Text(settings.tavilyApiKey);
+		}
+
+		const TavilySearchResult searchResult = TavilyClient::Search(tavilyApiKey, queryUtf8, maxResults, topicUtf8);
+		if (!searchResult.ok) {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["http_status"] = searchResult.httpStatus;
+			r["error"] = searchResult.error;
+			return JsonToLocalText(r);
+		}
+
+		outOk = true;
+		return Utf8ToLocalText(searchResult.normalizedResultJsonUtf8);
+	}
+
+	if (toolName == "fetch_url") {
+		std::string urlUtf8;
+		int timeoutSeconds = 60;
+		size_t maxBytes = 512 * 1024;
+		try {
+			const nlohmann::json args = nlohmann::json::parse(argumentsJson);
+			if (args.contains("url") && args["url"].is_string()) {
+				urlUtf8 = args["url"].get<std::string>();
+			}
+			if (args.contains("timeout_seconds") && args["timeout_seconds"].is_number_integer()) {
+				timeoutSeconds = (std::clamp)(args["timeout_seconds"].get<int>(), 1, 300);
+			}
+			if (args.contains("max_bytes") && args["max_bytes"].is_number_integer()) {
+				const int value = args["max_bytes"].get<int>();
+				maxBytes = (std::clamp)(value, 4096, 2097152);
+			}
+		}
+		catch (const std::exception& ex) {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["error"] = std::string("invalid arguments json: ") + ex.what();
+			return JsonToLocalText(r);
+		}
+
+		const HttpFetchResult fetchResult = WebDocumentClient::FetchTextUrl(urlUtf8, timeoutSeconds, maxBytes);
 		nlohmann::json r;
-		r["ok"] = false;
-		r["disabled"] = true;
-		r["error"] = "web fetch/search tools disabled in silent MCP build";
-		r["hint"] = "AutoLinker MCP keeps IDE source read/write tools only; use the external Codex environment for web lookups.";
+		r["ok"] = fetchResult.ok;
+		r["url"] = fetchResult.url;
+		r["final_url"] = fetchResult.finalUrl;
+		r["http_status"] = fetchResult.httpStatus;
+		r["content_type"] = fetchResult.contentType;
+		r["content_length"] = static_cast<unsigned long long>(fetchResult.contentLength);
+		r["body_text"] = fetchResult.bodyText;
+		r["body_truncated"] = fetchResult.bodyTruncated;
+		if (!fetchResult.error.empty()) {
+			r["error"] = fetchResult.error;
+		}
+		outOk = fetchResult.ok;
+		return JsonToLocalText(r);
+	}
+
+	if (toolName == "extract_web_document") {
+		std::string urlUtf8;
+		int timeoutSeconds = 60;
+		size_t maxBytes = 512 * 1024;
+		try {
+			const nlohmann::json args = nlohmann::json::parse(argumentsJson);
+			if (args.contains("url") && args["url"].is_string()) {
+				urlUtf8 = args["url"].get<std::string>();
+			}
+			if (args.contains("timeout_seconds") && args["timeout_seconds"].is_number_integer()) {
+				timeoutSeconds = (std::clamp)(args["timeout_seconds"].get<int>(), 1, 300);
+			}
+			if (args.contains("max_bytes") && args["max_bytes"].is_number_integer()) {
+				const int value = args["max_bytes"].get<int>();
+				maxBytes = (std::clamp)(value, 4096, 2097152);
+			}
+		}
+		catch (const std::exception& ex) {
+			nlohmann::json r;
+			r["ok"] = false;
+			r["error"] = std::string("invalid arguments json: ") + ex.what();
+			return JsonToLocalText(r);
+		}
+
+		const HttpFetchResult fetchResult = WebDocumentClient::FetchTextUrl(urlUtf8, timeoutSeconds, maxBytes);
+		const ExtractedWebDocument document = WebDocumentExtractor::Extract(fetchResult);
+
+		nlohmann::json links = nlohmann::json::array();
+		for (const auto& link : document.links) {
+			links.push_back({
+				{"text", link.text},
+				{"url", link.url}
+			});
+		}
+
+		nlohmann::json r;
+		r["ok"] = document.ok;
+		r["url"] = document.url;
+		r["http_status"] = document.httpStatus;
+		r["content_type"] = document.contentType;
+		r["title"] = document.title;
+		r["plain_text"] = document.plainText;
+		r["excerpt"] = document.excerpt;
+		r["links"] = std::move(links);
+		if (!document.error.empty()) {
+			r["error"] = document.error;
+		}
+		outOk = document.ok;
 		return JsonToLocalText(r);
 	}
 
@@ -511,7 +705,7 @@ std::string ExecuteToolCallImpl(
 		toolName == "add_support_library_to_project" ||
 		toolName == "compile_with_output_path") {
 		std::string resultJson;
-		if (!RequestToolExecutionFromMainThread(toolName, argumentsJson, resultJson, outOk, publicToolCall)) {
+		if (!RequestToolExecutionFromMainThread(toolName, argumentsJson, resultJson, outOk)) {
 			return R"({"ok":false,"error":"main thread tool execution failed"})";
 		}
 		return resultJson;
@@ -530,16 +724,15 @@ std::string ExecuteToolCall(
 	const std::string& argumentsJson,
 	bool& outOk,
 	bool enableLog,
-	const std::function<bool()>& cancelCallback,
-	bool publicToolCall)
+	const std::function<bool()>& cancelCallback)
 {
 	if (!enableLog) {
-		return ExecuteToolCallImpl(toolName, argumentsJson, outOk, publicToolCall, cancelCallback);
+		return ExecuteToolCallImpl(toolName, argumentsJson, outOk, cancelCallback);
 	}
 
 	LogInternalToolRequest(toolName, argumentsJson);
 	const auto startTime = std::chrono::steady_clock::now();
-	const std::string result = ExecuteToolCallImpl(toolName, argumentsJson, outOk, publicToolCall, cancelCallback);
+	const std::string result = ExecuteToolCallImpl(toolName, argumentsJson, outOk, cancelCallback);
 	const double elapsedMs = std::chrono::duration<double, std::milli>(
 		std::chrono::steady_clock::now() - startTime).count();
 	LogInternalToolResponse(toolName, result, elapsedMs);
