@@ -135,7 +135,7 @@ void ShowAISettingsAddIn()
 
 void UpdateEPackagerComponentAddIn()
 {
-	OutputStringToELog("[e-packager] 更新入口已禁用；请手动放置本地 e-packager.exe");
+	EPackagerIntegration::RunToolUpdateInBackground();
 }
 
 void ShowLinkerSettingsAddIn()
@@ -160,7 +160,17 @@ void ShowAIChatThemeSettingsAddIn()
 
 const auto& GetAddInMenuEntries()
 {
-	static const std::array<AddInMenuEntry, 0> kEntries = {};
+	static const std::array<AddInMenuEntry, 9> kEntries = { {
+		{ "打开项目目录", "这是个用作测试的辅助工具功能。", &OpenProjectDirectoryAddIn },
+		{ "打开AutoLinker配置目录", "这是个用作测试的辅助工具功能。", &OpenAutoLinkerConfigDirectoryAddIn },
+		{ "打开E语言目录", "这是个用作测试的辅助工具功能。", &OpenELanguageDirectoryAddIn },
+		{ "AutoLinker AI接口设置", "编辑AI接口地址、API Key、模型和提示词等配置。", &ShowAISettingsAddIn },
+		{ "AutoLinker AI对话配色设置", "编辑 AI 对话界面的多套颜色方案。", &ShowAIChatThemeSettingsAddIn },
+		{ "AutoLinker 链接器设置", "查看并编辑 AutoLinker/Config 下的 link.ini 链接器配置。", &ShowLinkerSettingsAddIn },
+		{ "AutoLinker EC模块自动切换设置", "配置调试用动态 ec 与编译用静态 ec 的成对自动切换规则。", &ShowEcSwitchSettingsAddIn },
+		{ "AutoLinker 核心库函数重写设置", "配置静态编译时额外强制链接的 .lib，用于覆盖核心库或第三方库同名符号。", &ShowForceLinkLibSettingsAddIn },
+		{ "更新e-packager组件", "检查并下载最新的 e-packager 组件。", &UpdateEPackagerComponentAddIn },
+	} };
 	return kEntries;
 }
 
@@ -306,8 +316,40 @@ INT WINAPI fnAddInFunc(INT nAddInFnIndex)
 
 void FneCheckNewVersion(void* pParams)
 {
-	(void)pParams;
-	OutputStringToELog("AutoLinker 启动更新检查已禁用");
+	Sleep(1000);
+
+	OutputStringToELog("AutoLinker开源下载地址：https://github.com/aiqinxuancai/AutoLinker");
+	std::string url = "https://api.github.com/repos/aiqinxuancai/AutoLinker/releases";
+	auto response = PerformGetRequest(url);
+
+	std::string currentVersion = AUTOLINKER_VERSION;
+	if (response.second == 200) {
+		std::string nowGithubVersion = "0.0.0";
+		if (strcmp(AUTOLINKER_VERSION, "0.0.0") == 0) {
+			OutputStringToELog(std::format("自编译版本，不检查更新，当前版本：{}", currentVersion));
+		}
+		else if (!response.first.empty()) {
+			try {
+				auto releases = json::parse(response.first);
+				for (const auto& release : releases) {
+					if (!release["prerelease"].get<bool>()) {
+						nowGithubVersion = release["tag_name"];
+						break;
+					}
+				}
+
+				Version nowGithubVersionObj(nowGithubVersion);
+				Version currentVersionObj(AUTOLINKER_VERSION);
+				if (nowGithubVersionObj > currentVersionObj) {
+					OutputStringToELog(std::format("有新版本：{}", nowGithubVersion));
+					AIChatFeature::SetUpdateAvailable(nowGithubVersion);
+				}
+			}
+			catch (const std::exception& e) {
+				OutputStringToELog(std::format("检查新版本失败，当前版本：{} 错误：{}", currentVersion, e.what()));
+			}
+		}
+	}
 }
 
 bool FneInit()
@@ -364,8 +406,9 @@ bool FneInit()
 		static_cast<unsigned long long>(reinterpret_cast<ULONG_PTR>(g_hwnd))));
 	OutputStringToELog(std::format("E进程ID{} 主句柄{}", processID, (int)g_hwnd));
 
-	TraceInitStep("IDE 扩展菜单已禁用");
+	TraceInitStep("开始注册 IDE 右键菜单");
 	RegisterIDEContextMenu();
+	TraceInitStep("IDE 右键菜单注册完成");
 	TraceInitStep("开始启动编辑框子类化巡检线程");
 	StartEditViewSubclassTask();
 	TraceInitStep("编辑框子类化巡检线程已启动");
@@ -378,9 +421,15 @@ bool FneInit()
 	TraceInitStep("开始初始化 Local MCP");
 	LocalMcpServer::Initialize();
 	TraceInitStep("Local MCP 初始化完成");
-	(void)headlessCompileMode;
-	TraceInitStep("GameAnalytics 已禁用");
-	TraceInitStep("Dependency catalog startup auto refresh disabled");
+	if (!headlessCompileMode) {
+		TraceInitStep("开始初始化 GameAnalytics");
+		GameAnalyticsClient::Initialize(&g_configManager);
+		TraceInitStep("GameAnalytics 初始化已触发");
+	}
+	else {
+		TraceInitStep("无头编译模式：跳过 GameAnalytics 初始化");
+	}
+	DependencyCatalogCache::Instance().StartAsyncRefreshIfNeeded(false, true);
 	ResolveCompileDebugStartAddressesForInit();
 	TraceInitStep("开始安装文件与编译相关 Hook");
 	StartHookCreateFileA();
@@ -388,7 +437,14 @@ bool FneInit()
 	HeadlessCompileRunner::NotifyIdeRuntimeReady();
 	TraceInitStep("检查无头编译请求");
 	HeadlessCompileRunner::StartIfRequested();
-	TraceInitStep("启动版本检查已禁用");
+	if (!headlessCompileMode) {
+		TraceInitStep("开始启动版本检查线程");
+		_beginthread(FneCheckNewVersion, 0, NULL);
+		TraceInitStep("版本检查线程已启动");
+	}
+	else {
+		TraceInitStep("无头编译模式：跳过版本检查线程");
+	}
 	g_uiInitialized = true;
 	TraceInitStep("FneInit 完成");
 	OutputStringToELog("初始化完成");
@@ -397,7 +453,8 @@ bool FneInit()
 
 EXTERN_C INT WINAPI AutoLinker_MessageNotify(INT nMsg, DWORD dwParam1, DWORD dwParam2)
 {
-	(void)dwParam2;
+	std::string s = std::format("AutoLinker_MessageNotify {0} {1} {2}", (int)nMsg, dwParam1, dwParam2);
+	OutputStringToELog(s);
 
 #ifndef __E_STATIC_LIB
 	if (nMsg == NL_GET_CMD_FUNC_NAMES) {

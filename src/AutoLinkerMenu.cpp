@@ -11,7 +11,6 @@ namespace {
 bool g_isContextMenuRegistered = false;
 HMENU g_topLinkerSubMenu = NULL;
 std::unordered_map<UINT, std::string> g_topLinkerCommandMap;
-constexpr bool kAutoLinkerUiMenusEnabled = false;
 
 // 根据当前打开的源文件路径生成链接器父菜单项的显示标题（Wide 字符串）。
 // 无源文件时返回通用名；有源文件时返回"[xxxx.e]使用的链接器"。
@@ -68,11 +67,6 @@ void UpdateLinkerSubMenuParentItem(HMENU hTargetMenu)
 void RegisterIDEContextMenu()
 {
 	if (g_isContextMenuRegistered) {
-		return;
-	}
-	if (!kAutoLinkerUiMenusEnabled) {
-		IDEFacade::Instance().ClearContextMenuItems();
-		g_isContextMenuRegistered = true;
 		return;
 	}
 
@@ -354,11 +348,6 @@ void RebuildTopLinkerSubMenu()
 
 bool HandleTopLinkerMenuCommand(UINT cmd)
 {
-	if (!kAutoLinkerUiMenusEnabled) {
-		(void)cmd;
-		return false;
-	}
-
 	if (cmd == IDM_AUTOLINKER_UNPACK_SOURCE) {
 		EPackagerIntegration::RunCurrentSourceUnpackToDirectory();
 		return true;
@@ -443,11 +432,6 @@ void HandleInitMenuPopup(HMENU hMenu)
 
 void PrepareAutoLinkerPopupMenu(HMENU hMenu)
 {
-	if (!kAutoLinkerUiMenusEnabled) {
-		(void)hMenu;
-		return;
-	}
-
 	if (hMenu == NULL) {
 		return;
 	}
@@ -479,11 +463,6 @@ void PrepareAutoLinkerPopupMenu(HMENU hMenu)
 
 bool IsKnownAutoLinkerPopup(HMENU hMenu)
 {
-	if (!kAutoLinkerUiMenusEnabled) {
-		(void)hMenu;
-		return false;
-	}
-
 	if (hMenu == NULL) {
 		return false;
 	}
@@ -499,11 +478,6 @@ bool IsKnownAutoLinkerPopup(HMENU hMenu)
 
 void FinalizeAutoLinkerPopupMenu(HMENU hMenu)
 {
-	if (!kAutoLinkerUiMenusEnabled) {
-		(void)hMenu;
-		return;
-	}
-
 	if (hMenu == NULL) {
 		return;
 	}

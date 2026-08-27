@@ -35,7 +35,7 @@ namespace {
 
 using json = nlohmann::json;
 
-constexpr const char* kLatestReleaseApi = "";
+constexpr const char* kLatestReleaseApi = "https://api.github.com/repos/aiqinxuancai/e-packager/releases/latest";
 constexpr const char* kGitHubHeaders =
 	"User-Agent: AutoLinker\r\n"
 	"Accept: application/vnd.github+json\r\n";
@@ -214,31 +214,6 @@ std::string Utf8PathString(const std::filesystem::path& path)
 	return Utf8FromWide(path.wstring());
 }
 
-bool WriteBinaryFile(const std::filesystem::path& path, const std::string& data, std::string& outError)
-{
-	std::error_code ec;
-	const std::filesystem::path parent = path.parent_path();
-	if (!parent.empty()) {
-		std::filesystem::create_directories(parent, ec);
-		if (ec) {
-			outError = "创建输出目录失败：" + ec.message();
-			return false;
-		}
-	}
-
-	std::ofstream out(path, std::ios::binary | std::ios::trunc);
-	if (!out.is_open()) {
-		outError = "打开输出文件失败：" + LocalPathString(path);
-		return false;
-	}
-
-	out.write(data.data(), static_cast<std::streamsize>(data.size()));
-	if (!out.good()) {
-		outError = "写入输出文件失败：" + LocalPathString(path);
-		return false;
-	}
-	return true;
-}
 std::filesystem::path GetTempDirectory()
 {
 	wchar_t buffer[MAX_PATH] = {};
@@ -329,64 +304,9 @@ std::filesystem::path GetToolsDirectory()
 	return std::filesystem::path(WideFromLocal(GetBasePath())) / L"tools";
 }
 
-std::filesystem::path GetCurrentModuleDirectory()
-{
-	HMODULE module = nullptr;
-	GetModuleHandleExW(
-		GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<LPCWSTR>(&GetCurrentModuleDirectory),
-		&module);
-	if (module == nullptr) {
-		return std::filesystem::path();
-	}
-
-	wchar_t buffer[MAX_PATH] = {};
-	constexpr DWORD kBufferChars = static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0]));
-	const DWORD length = GetModuleFileNameW(module, buffer, kBufferChars);
-	if (length == 0 || length >= kBufferChars) {
-		return std::filesystem::path();
-	}
-	return std::filesystem::path(buffer).parent_path();
-}
-
 std::filesystem::path GetEPackagerExePath()
 {
 	return GetToolsDirectory() / L"e-packager.exe";
-}
-
-std::vector<std::filesystem::path> GetEPackagerCandidatePaths()
-{
-	std::vector<std::filesystem::path> paths;
-	const auto addUnique = [&paths](const std::filesystem::path& path) {
-		if (path.empty()) {
-			return;
-		}
-		for (const auto& existing : paths) {
-			if (_wcsicmp(existing.wstring().c_str(), path.wstring().c_str()) == 0) {
-				return;
-			}
-		}
-		paths.push_back(path);
-	};
-
-	addUnique(GetEPackagerExePath());
-	const std::filesystem::path moduleDir = GetCurrentModuleDirectory();
-	addUnique(moduleDir / L"tools" / L"e-packager.exe");
-	addUnique(moduleDir / L"AutoLinker" / L"tools" / L"e-packager.exe");
-	addUnique(moduleDir / L"e-packager.exe");
-	return paths;
-}
-
-bool FindExistingEPackagerExePath(std::filesystem::path& outToolPath)
-{
-	for (const auto& candidate : GetEPackagerCandidatePaths()) {
-		std::error_code ec;
-		if (std::filesystem::exists(candidate, ec) && !ec) {
-			outToolPath = candidate;
-			return true;
-		}
-	}
-	return false;
 }
 
 std::filesystem::path GetEPackagerMetaPath()
@@ -634,9 +554,82 @@ bool IsUpdateCheckDue(bool toolExists)
 
 bool FetchLatestRelease(LatestReleaseInfo& outInfo, std::string& outError)
 {
-	(void)outInfo;
-	outError = "e-packager automatic update check is disabled in silent MCP build";
-	return false;
+	OutputStringToELog("[e-packager] 正在检查最新版本...");
+	auto response = PerformGetRequest(kLatestReleaseApi, kGitHubHeaders, 60000, false, false);
+	if (response.second != 200) {
+		outError = response.second == 0
+			? std::string("GitHub API 请求失败，未收到 HTTP 响应")
+			: std::format("GitHub API HTTP {}", response.second);
+		if (!response.first.empty()) {
+			outError += ": " + response.first.substr(0, (std::min<size_t>)(response.first.size(), 300));
+		}
+		return false;
+	}
+
+	json release = json::parse(response.first, nullptr, false);
+	if (!release.is_object()) {
+		outError = "GitHub API 返回的 release JSON 无效";
+		return false;
+	}
+
+	LatestReleaseInfo info = {};
+	info.tag = release.value("tag_name", std::string());
+	const json assets = release.value("assets", json::array());
+	for (const auto& asset : assets) {
+		if (!asset.is_object()) {
+			continue;
+		}
+		const std::string name = asset.value("name", std::string());
+		const std::string lowered = ToLowerAscii(name);
+		if (lowered.find("windows-win32") == std::string::npos || !EndsWithInsensitive(name, ".zip")) {
+			continue;
+		}
+		info.assetName = name;
+		info.downloadUrl = asset.value("browser_download_url", std::string());
+		break;
+	}
+
+	if (info.tag.empty() || info.assetName.empty() || info.downloadUrl.empty()) {
+		outError = "未找到 e-packager Windows Win32 zip 资源";
+		return false;
+	}
+
+	outInfo = std::move(info);
+	OutputStringToELog(std::format("[e-packager] 最新版本：{} ({})", outInfo.tag, outInfo.assetName));
+	return true;
+}
+
+std::string DetectInstalledVersion(const std::filesystem::path& exePath)
+{
+	if (!std::filesystem::exists(exePath)) {
+		return std::string();
+	}
+
+	ProcessRunResult result = RunProcessAndCaptureImpl(exePath, { L"version" }, exePath.parent_path());
+	std::string text = BytesToLocalText(result.stdOutBytes);
+	if (!result.stdErrBytes.empty()) {
+		text += "\n";
+		text += BytesToLocalText(result.stdErrBytes);
+	}
+	if (!result.ok && text.empty()) {
+		return std::string();
+	}
+	return text;
+}
+
+bool WriteBinaryFile(const std::filesystem::path& path, const std::string& bytes, std::string& outError)
+{
+	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	if (!out.is_open()) {
+		outError = "无法写入文件：" + LocalPathString(path);
+		return false;
+	}
+	out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+	if (!out.good()) {
+		outError = "写入文件失败：" + LocalPathString(path);
+		return false;
+	}
+	return true;
 }
 
 bool DownloadZip(const LatestReleaseInfo& info, const std::filesystem::path& zipPath, std::string& outError)
@@ -784,27 +777,54 @@ bool EnsureToolReadyImpl(
 	bool allowExistingFallback)
 {
 	const std::filesystem::path toolPath = GetEPackagerExePath();
-	std::filesystem::path existingToolPath;
-	const bool toolExists = FindExistingEPackagerExePath(existingToolPath);
-	if (!forceCheck) {
-		if (toolExists) {
-			outToolPath = existingToolPath;
-			return true;
-		}
-		outError = "未找到本地 e-packager.exe；检查更新和下载已禁用，请把 e-packager.exe 手动放到 AutoLinker\\tools";
-		return false;
-	}
-
-	if (toolExists) {
-		outToolPath = existingToolPath;
-		OutputStringToELog("[e-packager] 检查更新和下载已禁用，继续使用本地工具：" + LocalPathString(existingToolPath));
+	const bool toolExists = std::filesystem::exists(toolPath);
+	if (!forceCheck && !IsUpdateCheckDue(toolExists)) {
+		outToolPath = toolPath;
 		return true;
 	}
 
-	(void)toolPath;
-	(void)allowExistingFallback;
-	outError = "未找到本地 e-packager.exe；检查更新和下载已禁用，请把 e-packager.exe 手动放到 AutoLinker\\tools";
-	return false;
+	LatestReleaseInfo latest;
+	std::string fetchError;
+	if (!FetchLatestRelease(latest, fetchError)) {
+		if (toolExists && allowExistingFallback) {
+			OutputStringToELog("[e-packager] 检查更新失败，将继续使用现有工具：" + fetchError);
+			outToolPath = toolPath;
+			return true;
+		}
+		outError = "无法下载 e-packager：" + fetchError;
+		return false;
+	}
+
+	bool needsDownload = !toolExists;
+	if (toolExists) {
+		const std::string installedVersion = ToLowerAscii(DetectInstalledVersion(toolPath));
+		const std::string latestTag = ToLowerAscii(latest.tag);
+		const std::string latestTagNoPrefix = StripLeadingVersionPrefix(latestTag);
+		if (installedVersion.find(latestTag) == std::string::npos &&
+			installedVersion.find(latestTagNoPrefix) == std::string::npos) {
+			needsDownload = true;
+		}
+	}
+
+	if (!needsDownload) {
+		OutputStringToELog("[e-packager] 本地工具已是最新版本：" + latest.tag);
+		SaveMeta(latest);
+		outToolPath = toolPath;
+		return true;
+	}
+
+	if (!DownloadAndInstallTool(latest, outError)) {
+		if (toolExists && allowExistingFallback) {
+			OutputStringToELog("[e-packager] 更新失败，将继续使用现有工具：" + outError);
+			outError.clear();
+			outToolPath = toolPath;
+			return true;
+		}
+		return false;
+	}
+
+	outToolPath = toolPath;
+	return true;
 }
 
 void ToolUpdateWorker(void*)
