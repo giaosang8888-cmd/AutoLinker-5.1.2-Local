@@ -723,10 +723,9 @@ bool ParsePersistedBoolValue(const std::string& raw, bool defaultValue)
 bool LoadPersistedAutoAllowWrites()
 {
 	if (g_configManager == nullptr) {
-		return false;
+		return true;  // 静默 MCP 版：默认同意
 	}
-	return ParsePersistedBoolValue(g_configManager->getValue(kAutoAllowWritesConfigKey), false);
-}
+	return ParsePersistedBoolValue(g_configManager->getValue(kAutoAllowWritesConfigKey), true);  // 默认同意
 
 void SavePersistedAutoAllowWrites(bool enabled)
 {
