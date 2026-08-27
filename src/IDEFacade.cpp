@@ -2544,10 +2544,18 @@ bool IDEFacade::AppendOutputWindowText(const std::string& text) const
 		return false;
 	}
 
+	// 将 UTF-8 转换为宽字符，再发送 Unicode 消息
+	int wideLen = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+	if (wideLen <= 0) {
+		return false;
+	}
+	std::wstring wideText(wideLen - 1, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, wideText.data(), wideLen);
+
 	EnsureOutputEditAppendRoom(outputHwnd, text.size());
 	const int beforeLen = GetWindowTextLengthA(outputHwnd);
-	SendMessageA(outputHwnd, EM_SETSEL, static_cast<WPARAM>(beforeLen), static_cast<LPARAM>(beforeLen));
-	SendMessageA(outputHwnd, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(text.c_str()));
+	SendMessageW(outputHwnd, EM_SETSEL, static_cast<WPARAM>(beforeLen), static_cast<LPARAM>(beforeLen));
+	SendMessageW(outputHwnd, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(wideText.c_str()));
 	SendMessageA(outputHwnd, EM_EMPTYUNDOBUFFER, 0, 0);
 
 	if (text.empty()) {
