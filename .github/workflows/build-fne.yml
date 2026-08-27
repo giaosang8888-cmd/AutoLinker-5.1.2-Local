@@ -1,0 +1,58 @@
+name: Build AutoLinker fne
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 5.1.2-local)'
+        required: false
+        default: '5.1.2-local'
+        
+  push:
+    branches:
+      - main
+
+env:
+  BUILD_CONFIGURATION: fne_release
+  BUILD_PLATFORM: x86
+
+jobs:
+  build:
+    runs-on: windows-2022
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        msbuild AutoLinker.vcxproj /t:Build /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{env.BUILD_PLATFORM}} /m /v:minimal
+
+    - name: Verify Output
+      run: |
+        if (Test-Path "bin/${{env.BUILD_CONFIGURATION}}/AutoLinker.fne") {
+          $size = (Get-Item "bin/${{env.BUILD_CONFIGURATION}}/AutoLinker.fne").Length
+          Write-Output "AutoLinker.fne built successfully, size: $size bytes"
+        } else {
+          Write-Error "Build failed: AutoLinker.fne not found"
+        }
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoLinker-fne-${{ github.run_number }}
+        path: bin/${{env.BUILD_CONFIGURATION}}/AutoLinker.fne
+        retention-days: 30
+
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: bin/${{env.BUILD_CONFIGURATION}}/AutoLinker.fne
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
